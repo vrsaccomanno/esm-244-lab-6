@@ -104,3 +104,74 @@ plot(ca_eco) #st_simplify make this go way faster
 plot(ca_counties) #longer because base plot it to plot something different based on every attribute in the file.
 ```
 
+Make a map with GGplot
+```{r}
+#splitting max number of colors in RColorBrewer. We have 13 ecoregions
+color_count<-13
+
+my_colors<- colorRampPalette(brewer.pal(10, "Set2"))(color_count) #first is how many colors to use and then how to split the selected ramp
+
+#SF likes ggplt and tmap. Ca_eco is base layer. Can't tell that we simplified data about using "simplify"
+ggplot(ca_eco)+
+  geom_sf(aes(fill=Region),#how we create the map using spatial info
+          color="NA", #get rid of boundaries
+          show.legend=FALSE)+
+  scale_fill_manual(values=my_colors) +
+  geom_sf(data=ca_counties, #adding counties. need to tell exactly where to get data
+          fill = "NA",
+          color = "gray30",
+          size=0.1)+
+  geom_point(data=ca_dams, #add dams (dams has lat and long in datafram)
+             aes(x=Longitude, y= Latitude),
+             size=1,
+             color= "gray10",
+             alpha = 0.4)+
+  theme_minimal()+
+  coord_sf(datum = NA) #remove lat /log numbers
+
+
+
+```
+
+What about subsets and intersections of spatial information. Dams in the Sierra Nevada Ecoregion
+```{r}
+#Joing dam and eco region data. Filter eco region and join with dam data that is assoicated with the filtered geometry
+sn <- ca_eco %>% 
+  filter(Region == "Sierra Nevada") %>% #only pulling out geometry for Sierra nevada ecoregion
+  st_join(ca_dams) #joins geometry with dams
+
+# Then plot:
+ggplot(sn) + #put main layer (sn) in first line bc calling throughout = cleaner code
+  geom_sf(data = ca_counties, fill = "wheat3", color = "NA") + #first data are all county info with no boundaries
+  geom_sf(fill = "lemonchiffon4", color = "NA") + #now adding SN but not in this line bc it is above. It goes there first
+  geom_point(aes(x = Longitude, y = Latitude), size = 0.5, color = "red4") + #adding dam points in sn- still pulling from sn finlter from first line of code
+  theme_void() +
+  coord_sf(datum=NA) +
+  labs(x = "", y = "", title = "CA Dams in Sierra Nevada Eco-Region")
+```
+
+###Example 3. Ecoregions for SB county
+Can plot just pieces using st_intersection (for example, if we only want to plot eco-regions in Santa Barbara County), and crop graphing space with coord_sf() limits. 
+
+```{r}
+# Get just SB county
+sb <- ca_counties %>% 
+  filter(NAME == "Santa Barbara")
+#View(sb) = 4 rows of data because of the islands. Each row is its own polygon.
+
+# Clip eco-region spatial data to intersection with SB county:
+eco_clip <- st_intersection(ca_eco, sb) #intersection between two polygons. One you call first (eco) is the one getting clipped to the second (sb)
+
+# Plot that!
+ggplot(eco_clip) + #eco_clip is base layer, will be called throughout
+  geom_sf(data = ca_counties, fill = "gray90", color = "gray80", size = 0.2) + # First add gray California bc want to have other counties shown while highlighting SB county
+  geom_sf(aes(fill = Region), color = "NA") + # ...then add eco-regions (clipped)
+  scale_fill_manual(values = c("darkolivegreen2","darkolivegreen","gold2")) + # Change color scheme
+  coord_sf(xlim = c(-121,-119), ylim = c(33.5,35.5)) + # Crop plotting area
+  geom_point(aes(x = -119.6982, y = 34.4208), size = 2) + # Add a point for SB City
+  geom_text(x = -119.6982, y = 34.35, label = "Santa Barbara") +
+  theme_minimal() + # Update theme
+  theme(legend.position = c(0.5,0.15)) +# Move the legend
+  labs(x = "", y = "", title = "Santa Barbara County Eco-Regions")
+```
+
