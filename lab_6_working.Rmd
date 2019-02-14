@@ -1,0 +1,106 @@
+---
+title: "lab6"
+author: "Vienna Saccomanno"
+date: "2/14/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Goals: 
+
+- Read in spatial data (shapefiles)
+- Simplify polygons (st_simplify)
+- Add and transform projection (st_transform and st_crs)
+- Create several finalized-ish maps in R
+- Join spatial data (st_join)
+- Find spatial intersections (st_intersect)
+- Interactive plots with tmap
+- Updating color schemes, base layers, etc.
+- Plotting spatial lines
+- Creating sf data from lat/lon coordinates
+
+Awesome resource: 
+*Geocomputation in R* by Robin Lovelace, available online: 
+<https://geocompr.robinlovelace.net/>
+
+```{r}
+library(tidyverse)
+library(sf)
+library(tmap)
+library(leaflet)
+library(ggrepel)
+library(ggspatial)
+library(RColorBrewer)
+library(raster)
+```
+
+###Useful information on file types (from gisgeography.com):
+
+- **.shp** is a mandatory Esri file that gives features their geometry. Every shapefile has its own .shp file that represent spatial vector data. For example, it could be points, lines and polygons in a map.
+
+- **.shx** are mandatory Esri and AutoCAD shape index position. This type of file is used to search forward and backwards.
+
+- **.dbf** is a standard database file used to store attribute data and object IDs. A .dbf file is mandatory for shape files. You can open .DBF files in Microsoft Access or Excel.
+
+- **.prj** is an optional file that contains the metadata associated with the shapefiles coordinate and projection system. If this file does not exist, you will get the error “unknown coordinate system”. If you want to fix this error, you have to use the “define projection” tool which generates .prj files.
+
+- **.xml** file types contains the metadata associated with the shapefile. If you delete this file, you essentially delete your metadata. You can open and edit this optional file type (.xml) in any text editor.
+
+- **.sbn** is an optional spatial index file that optimizes spatial queries. This file type is saved together with a .sbx file. These two files make up a shape index to speed up spatial queries.
+
+- **.sbx** are similar to .sbn files in which they speed up loading times. It works with .sbn files to optimize spatial queries. We tested .sbn and .sbx extensions and found that there were faster load times when these files existed. It was 6 seconds faster (27.3 sec versus 33.3 sec) compared with/without .sbn and .sbx files.
+
+- **.cpg** are optional plain text files that describes the encoding applied to create the shapefile. If your shapefile doesn’t have a cpg file, then it has the system default encoding. 
+
+###Mapping Examples
+
+####Example 1: Dammed California
+
+Data: California Jurisdictional Dams
+
+Accessed from: <https://hub.arcgis.com/datasets/98a09bec89c84681ae1701a2eb62f599_0/data?geometry=-150.074%2C31.096%2C-87.54%2C43.298&page=10>
+
+"This dataset is a feature class identifying all dams currently under the jurisdiction of the Division of Safety of Dams (DSOD). The dataset is extracted from DSOD internal records and contains basic information about the dam including the type of construction, basic dimensions such as height, length, and maximum storage capacity; abbreviated owner information to identify the entity legally responsible for the dam; an assessment of the downstream hazard associated with the dam; an assessment of the current condition of the dam; and indication as to whether the dam is operating at a restricted storage level. Several dams span rivers that define county boundaries, so DSOD references the right abutment of the dam to identify the location of the structure and to associate it with a singular administrative subdivision of California."
+
+Data: California eco-regions (EPA)
+
+Accessed from: <https://www.epa.gov/eco-research/ecoregion-download-files-state-region-9>
+
+a. Read in the California ecoregions data (layer "ca_eco"), select only the attribute for eco-region (US_L3NAME), rename that to "Region", simplify the polygons (for time) using st_simplify, and set the CRS:
+
+```{r}
+#read in data
+ca_eco<- read_sf(".", layer="ca_eco" ) %>% #SF because getting simple features information. "ca_eco" calls all file types with this start!
+  dplyr::select(US_L3NAME) %>%  #select just geometries + attributes
+  rename(Region = US_L3NAME) %>% 
+  st_simplify(dTolerance = 100) %>% #goes through a polygon and collpses points within "x" distance (m). Makes big datasets more managemble
+  st_transform(crs=4326)#takes an existing projection and change it
+
+#Check projections st_crs(ca_eco)
+```
+
+
+```{r}
+ca_counties <-read_sf(".", layer = "california_county_shape_file")#no crs associated with this file - need one
+  
+st_crs(ca_counties)=4326
+  
+```
+
+```{r}
+ca_dams<-read_sf(".", layer= "California_Jurisdictional_Dams") %>% 
+  rename(Condition = Condition_)
+
+ca_dams$condition <- fct_relevel(ca_dams$Condition,
+                                 "Fair","Satisfactory","Unsatisfactory","Poor")
+```
+
+
+```{r}
+plot(ca_eco) #st_simplify make this go way faster
+plot(ca_counties) #longer because base plot it to plot something different based on every attribute in the file.
+```
+
