@@ -166,12 +166,131 @@ eco_clip <- st_intersection(ca_eco, sb) #intersection between two polygons. One 
 ggplot(eco_clip) + #eco_clip is base layer, will be called throughout
   geom_sf(data = ca_counties, fill = "gray90", color = "gray80", size = 0.2) + # First add gray California bc want to have other counties shown while highlighting SB county
   geom_sf(aes(fill = Region), color = "NA") + # ...then add eco-regions (clipped)
-  scale_fill_manual(values = c("darkolivegreen2","darkolivegreen","gold2")) + # Change color scheme
-  coord_sf(xlim = c(-121,-119), ylim = c(33.5,35.5)) + # Crop plotting area
-  geom_point(aes(x = -119.6982, y = 34.4208), size = 2) + # Add a point for SB City
-  geom_text(x = -119.6982, y = 34.35, label = "Santa Barbara") +
+  scale_fill_manual(values = c("darkolivegreen2","darkolivegreen","gold2")) + # Change color scheme of discrete outcomes that exist is SB county
+  coord_sf(xlim = c(-121,-119), ylim = c(33.5,35.5)) + # Crop plotting area - limit coordinates included in big map
+  geom_point(aes(x = -119.6982, y = 34.4208), size = 2) + # Add a point for SB City to give context
+  geom_text(x = -119.6982, y = 34.35, label = "Santa Barbara") + #add a title for SB
   theme_minimal() + # Update theme
   theme(legend.position = c(0.5,0.15)) +# Move the legend
   labs(x = "", y = "", title = "Santa Barbara County Eco-Regions")
+```
+
+####Example 4. Intro to interactive plots with tmap
+- tmaps can do interactive and non-interactive plots
+- power plotting tool if ya want interactivity
+
+```{r}
+# First, create a tmap object that we'll then make interactive. Syntax is the same as ggplot
+map_sb_eco <- tm_shape(eco_clip) + #saying take this info and make it a tm object. Haven't told it what we want to plot yet.
+  tm_fill("Region", palette = "RdPu", alpha = 0.5) + #fill ecocliips
+  tm_shape(ca_counties)+
+  tm_borders()
+  #tm_polygons() # Use tm_polygons for fill + lines; but can just show fill or borders (tm_fill or tm_borders)!
+
+# Check class
+# class(map_sb_eco)
+
+# View it (note: some bg layers can take a while...)
+tmap_mode("view") #this makes it interactive viewing. Maintained when knitting!
+map_sb_eco
+
+#Can change base map leaflet::providers
+#example of different basemap
+tm_basemap("BasemapAT")+
+  tm_shape(eco_clip)+
+  tm_borders(col="white")
+
+```
+
+####Example 5. SB fault line data
+
+Fault line data from California Dept. of Conservation:  <https://maps.conservation.ca.gov/geology/#datalist>
+
+Separate fault line types syncline/anticline, certain/concealed, direction columns using tidyr::separate(). 
+
+```{r}
+fault_lines <- read_sf(".", layer = "GMC_str_arc") %>% 
+  st_transform(crs = 4326) %>% #existing projection (there is a .prj file)
+  separate(LTYPE, into = c("syn_ant", "certainty", "direction"), sep = ",") #breaking up column "LTYPE" in 3 new columns. Separator to break this all up is a comma. R tells you there are some scenarios when there weren't 3 things - R adds an NA all good. This will help us to visualize base on different outcomes
+
+# Base plot:
+plot(fault_lines) #plots all the different attributes
+
+# All CA with faultlines ontop. 
+
+ggplot() + #keeping top layer empty bc we will be changing it
+  geom_sf(data = ca_counties, fill = "black", color = "NA") + 
+  geom_sf(data = fault_lines, aes(color = syn_ant)) + #making color different based on the column syn_ant
+  theme_dark()
+
+# Limit to faults within SB polygon: 
+sb_faults <- fault_lines %>% 
+  st_intersection(sb) # this time we are piping through it. taking the fault lines data and finding where it intersects SB
+
+# Plotting with ggplot and zooming in on SB
+ggplot() +
+  geom_sf(data = sb) +
+  geom_sf(data = sb_faults, aes(color = syn_ant))
+
+# Plotting with tmap to make it interactive
+tmap_mode("view") #default once set to view
+tm_basemap("CartoDB.DarkMatter") +
+  tm_shape(sb) +
+  tm_borders(col = "gray50", lwd = 2) +
+  tm_shape(sb_faults) +
+  tm_lines(col = "syn_ant", palette = c("orange","purple"), lwd = 2) #"lwd" = line width
+```
+
+####Example 6. Faceted maps - just how you'd expect it to work. In ggplot and with tm_facets.
+- based on different levels of a variable
+- generally faceted by year
+- here looking at types of fault lines
+
+```{r}
+
+#Back to all of CA
+ggplot() +
+  geom_sf(data = ca_counties, fill = "black", color = "NA") +
+  geom_sf(data = fault_lines, aes(color = syn_ant)) + #color dependant on what kind of fault line it is
+  theme_dark() +
+  facet_wrap(~syn_ant) # Choose variable to facet by - kind of fault line it is. Plotting CA 4 times because 4 facets
+
+# Can also do this with tmap: 
+tm_basemap("CartoDB.DarkMatter") +
+  tm_shape(sb) +
+  tm_borders(col = "gray50", lwd = 2) +
+  tm_shape(sb_faults) +
+  tm_lines(col = "syn_ant", palette = c("orange","purple"), lwd = 2) +
+  tm_facets(by = "syn_ant") #this makes it interactive
+
+```
+
+####Example 7. Creating spatial data from latitude/longitude information - from scratch
+
+-making spatial points - only makes points with points
+-Make data sf objects
+
+
+California Sensitive Shoreline Sites (CA DFW: <http://data-cdfw.opendata.arcgis.com/datasets/252b33ef5ce94e1d8fc4cad67731b277_0>)
+
+"The purpose of the sensitive site layer is to provide knowledge to spill responders of the location of sensitive sites in order to protect them during a spill response."
+
+Read in the data:
+```{r}
+
+ca_sites <- read_csv("cadfw_sensitive_sites.csv") #back to a normal csv, not spatial
+
+```
+
+```{r}
+# Read in by longitude and latitude in CSV, and set CRS. Make R know this is spatial data
+
+sites_sf <- st_as_sf(ca_sites, coords = c("LONDD","LATDD"), crs = 4326) #st_as_sf is the function and then tell R where the coordinates are so that it know where the spatial data are. Otherwise R has no idea these are spatial. Also no projection so we need to set it. Now has sticky geometry and can use sf!
+
+# Then make a plot: 
+ggplot() +
+  geom_sf(data = ca_counties, fill = "gray40") +
+  geom_sf(data = sites_sf, aes(color = PRI_CODE), size = 0.5) #because sticky, don't use geom_point. Color by priority code.
+
 ```
 
