@@ -294,3 +294,37 @@ ggplot() +
 
 ```
 
+###Example 8. Chloropleths (color coded by value/outcome) of CA counties by number of dams in each county
+- Sometimes spatial info from different soruces = slightly diff polygons. Run an intersect line as a safety check
+
+```{r}
+#Sometimes spatial info from different soruces = slightly diff polygons. Run an intersect line as a safety check
+intersection <- st_intersection(x = ca_dams, y = ca_counties) #just dams in CA counties. Bounds all the dams and their country info
+
+#count how many dams in each county
+dams_per_county <- intersection %>% 
+  group_by(NAME) %>% #group_by works with spatial data. Grouping in Rs brain by county name in intersection data
+  tally()
+#Get county name, number and geometry!
+
+# Check it out: 
+# View(dams_per_county)
+
+# Then merge to the ca_counties data: 
+
+ca_tot <- ca_counties %>% 
+  st_join(dams_per_county) %>% 
+  dplyr::select(NAME.x, n) %>%
+  rename(name = NAME.x)
+
+# Reassign NA values to zero:
+ca_tot$n[is.na(ca_tot$n)] <- 0
+
+ggplot() +
+  geom_sf(data =ca_tot, aes(fill = n), size = 0.2) +
+  theme_minimal() +
+  scale_fill_continuous(low = "yellow", high = "red")
+```
+
+
+Find counts of dams per county:
